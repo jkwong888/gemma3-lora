@@ -1,0 +1,6 @@
+hf_token
+model
+dataset
+env
+gemma-text-to-sql
+*.jsonl

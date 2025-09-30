@@ -1,0 +1,16 @@
+torch
+datasets==3.3.2
+accelerate==1.4.0
+evaluate==0.4.3
+bitsandbytes==0.45.3
+trl==0.15.2
+peft==0.14.0
+protobuf 
+sentencepiece
+wheel
+tensorboard
+transformers>=4.51.3
+flash-attn==2.7.3
+flashinfer-python
+google-cloud-storage
+gcsfs
