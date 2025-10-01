@@ -38,7 +38,7 @@ def create_conversation(sample):
 
 def main():
     # Hugging Face model id
-    model_id = "google/gemma-3-27b-it" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+    model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
     #model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
 
     dataset_id = "philschmid/gretel-synthetic-text-to-sql" 
@@ -77,6 +77,7 @@ def main():
        tokenizer=f"./model/{model_id}",
        gpu_memory_utilization=0.95,
        max_num_seqs=8,
+       max_model_len=10000,
     )
 
     outputs = vllm_model.generate([example["formatted_chat"] for example in dataset['test']], sampling_params)
