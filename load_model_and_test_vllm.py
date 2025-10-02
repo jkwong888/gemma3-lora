@@ -24,7 +24,7 @@ def main():
 
     dataset_id = "philschmid/gretel-synthetic-text-to-sql" 
 
-    dataset = load_dataset_from_gcs(f"gs://{GCS_BUCKET_NAME}/{GCS_DESTINATION_PATH}/{dataset_id}")
+    dataset = load_dataset_from_gcs(f"gs://{GCS_MODEL_BUCKET_NAME}/{GCS_DESTINATION_PATH}/{dataset_id}")
 
     # Generate our SQL query.
     print(f"processing {dataset.num_rows} records")
