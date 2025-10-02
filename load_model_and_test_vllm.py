@@ -58,10 +58,15 @@ def main():
     vllm_model = LLM(
        model=local_dir,
        tokenizer=local_dir,
-       gpu_memory_utilization=0.95,
-       max_num_seqs=8,
-       max_model_len=10000,
+       gpu_memory_utilization=0.95, # how much total VRAM we're allowed to use
+       max_model_len=10000,         # model context window length (incl input and output) - affects total KV Cache size calculation on startup
+       max_num_seqs=8,              # maximum number of concurrent sequences processed in parallel in a batch 
+       max_num_batched_tokens=2048, # number of tokens to process in a batch - bigger numbers here for larger input context that is mostly prefill,
+                                    # smaller numbers for lower inter-token latency for longer outputs (smaller batches when decode phase is prioritized)
     )
+
+    # note: max_num_seqs * max_num_batched_tokens affects throughput at the cost of more VRAM usage, as processing more sequences concurrently requires
+    # more VRAM for kv cache
 
     outputs = vllm_model.generate([example["formatted_chat"] for example in dataset], sampling_params)
     with open('output.jsonl', 'w') as outfile:
