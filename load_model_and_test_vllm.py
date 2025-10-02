@@ -11,8 +11,11 @@ import json
 import asyncio
 import os
 
-GCS_BUCKET_NAME = "jkwng-hf-datasets"  
-GCS_DESTINATION_PATH = "datasets" # The folder path inside your GCS bucket
+GCS_MODEL_BUCKET_NAME = "jkwng-model-data"  
+GCS_MODEL_PATH = "models" # The folder path inside your GCS bucket
+
+GCS_DATASET_BUCKET_NAME = "jkwng-hf-datasets"  
+GCS_DATASET_PATH = "datasets" # The folder path inside your GCS bucket
 
 def main():
     # Hugging Face model id
@@ -24,7 +27,7 @@ def main():
     dataset = load_dataset_from_gcs(f"gs://{GCS_BUCKET_NAME}/{GCS_DESTINATION_PATH}/{dataset_id}")
 
     # Generate our SQL query.
-    print(f"processing {dataset['test'].num_rows} records")
+    print(f"processing {dataset.num_rows} records")
 
     print(f"applying chat template to dataset...")
     # create OAI style conversation (?)
@@ -34,8 +37,7 @@ def main():
     #print(dataset["test"]["messages"])
 
     local_dir = f"./model/{model_id}"
-    if not os.path.exists(local_dir):
-        asyncio.run(load_model_from_gcs(f"gs://jkwng-model-data/models/{model_id}", local_dir))
+    asyncio.run(load_model_from_gcs(f"gs://{GCS_MODEL_BUCKET_NAME}/{GCS_MODEL_PATH}/{model_id}", local_dir))
 
     tokenizer = AutoTokenizer.from_pretrained(local_dir) # Load the Instruction Tokenizer to use the official Gemma template
 
@@ -61,15 +63,15 @@ def main():
        max_model_len=10000,
     )
 
-    outputs = vllm_model.generate([example["formatted_chat"] for example in dataset['test']], sampling_params)
+    outputs = vllm_model.generate([example["formatted_chat"] for example in dataset], sampling_params)
     with open('output.jsonl', 'w') as outfile:
         for idx, output in enumerate(tqdm(outputs)):
           # Extract the user query and original answer
           answer = {
             "original_prompt": output.prompt,
-            "sql_context": dataset['test'][idx]['sql_context'],
-            "user_query": dataset['test'][idx]['sql_prompt'],
-            "ground_truth": dataset['test'][idx]['sql'],
+            "sql_context": dataset[idx]['sql_context'],
+            "user_query": dataset[idx]['sql_prompt'],
+            "ground_truth": dataset[idx]['sql'],
             "generated_answer": output.outputs[0].text,
           }
 

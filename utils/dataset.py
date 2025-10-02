@@ -1,6 +1,5 @@
 
 import gcsfs
-from utils.prompt import create_conversation
 from datasets import load_from_disk
 
 def create_conversation(sample,system_message, user_prompt):
