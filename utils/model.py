@@ -4,6 +4,8 @@ from google.cloud import storage
 from google.api_core.exceptions import NotFound
 import os
 import sys
+import hashlib
+import base64
 
 
 def download_from_hf(model_id, local_dir):
@@ -21,6 +23,7 @@ def download_from_hf(model_id, local_dir):
 async def upload_to_gcs(gcs_bucket_name, gcs_destination_path, model_id, local_dir):
     """
     Uploads a model from a local directory to a GCS bucket.
+    Skips upload if the file with the same name exists in GCS and its hash matches the local file's hash.
 
     Args:
         gcs_bucket_name (str): The name of the GCS bucket.
@@ -45,6 +48,12 @@ async def upload_to_gcs(gcs_bucket_name, gcs_destination_path, model_id, local_d
     gcs_uri = f"gs://{gcs_bucket_name}/{gcs_destination_path}/{model_id}"
     print(f"Target GCS URI: {gcs_uri}")
 
+    # Get existing blobs and their hashes
+    print("Checking for existing files in GCS...")
+    existing_blobs = {}
+    for blob in bucket.list_blobs(prefix=gcs_destination_path):
+        existing_blobs[blob.name] = blob.md5_hash
+
     print(f"Uploading files from {local_dir} to {gcs_bucket_name}...")
     semaphore = asyncio.Semaphore(8)
     tasks = []
@@ -53,18 +62,37 @@ async def upload_to_gcs(gcs_bucket_name, gcs_destination_path, model_id, local_d
             local_path = os.path.join(root, filename)
             relative_path = os.path.relpath(local_path, local_dir)
             gcs_path = os.path.join(gcs_destination_path, relative_path).replace(os.path.sep, '/')
+
+            remote_hash = existing_blobs.get(gcs_path)
+            if remote_hash:
+                local_hash = _calculate_md5_base64(local_path)
+                if local_hash == remote_hash:
+                    print(f"  Skipping '{local_path}', hashes match.")
+                    continue
+
             task = _upload_blob_async(bucket, semaphore, local_path, gcs_path)
             tasks.append(task)
 
     if not tasks:
+        print("All files are up to date.")
         return
 
     await asyncio.gather(*tasks)
 
 
+def _calculate_md5_base64(file_path):
+    """Calculates the MD5 hash of a file and returns it as a base64 encoded string."""
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return base64.b64encode(hash_md5.digest()).decode('utf-8')
+
+
 async def load_model_from_gcs(gcs_uri, local_dir):
     """
     Downloads a model from a GCS URI to a local directory.
+    Skips download if the local file with the same name exists and its hash matches the GCS object's hash.
 
     Args:
         gcs_uri (str): The GCS URI of the model.
@@ -91,6 +119,18 @@ async def load_model_from_gcs(gcs_uri, local_dir):
     for blob in bucket.list_blobs(prefix=prefix):
         local_path = os.path.join(local_dir, os.path.relpath(blob.name, prefix))
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        # Check if local file exists and hashes match
+        if os.path.exists(local_path):
+            # Reload the blob to get the md5_hash
+            blob.reload()
+            remote_hash = blob.md5_hash
+            if remote_hash:
+                local_hash = _calculate_md5_base64(local_path)
+                if local_hash == remote_hash:
+                    print(f"  Skipping '{local_path}', hashes match.")
+                    continue
+
         task = _download_blob_async(semaphore, blob, local_path)
         tasks.append(task)
 
