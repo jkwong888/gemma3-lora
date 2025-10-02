@@ -1,12 +1,10 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageTextToText, BitsAndBytesConfig
-from google.cloud import storage
-from google.api_core.exceptions import NotFound
-from huggingface_hub import snapshot_download
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageTextToText
 
 import os
 import sys
 import asyncio
+from utils.model import download_from_hf, upload_to_gcs
 
 GCS_BUCKET_NAME = "jkwng-model-data"  
 GCS_DESTINATION_PATH = "models" # The folder path inside your GCS bucket
@@ -17,33 +15,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 #model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
 model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
 
-async def upload_blob_async(bucket, semaphore, local_path, gcs_path):
-    """
-    Asynchronously uploads a single file to GCS, managed by a semaphore.
-    
-    Args:
-        bucket (storage.Bucket): The GCS bucket object.
-        semaphore (asyncio.Semaphore): The semaphore to control concurrency.
-        local_path (str): The path to the local file to upload.
-        gcs_path (str): The destination path in the GCS bucket.
-    """
-    # The 'async with' statement waits until a slot is available in the semaphore.
-    # If the semaphore counter is at its max, this line will pause until
-    # another task releases the semaphore.
-    async with semaphore:
-        try:
-            # blob.upload_from_filename is a blocking I/O call.
-            # asyncio.to_thread runs this blocking function in a separate thread,
-            # allowing the main event loop to stay responsive.
-            await asyncio.to_thread(
-                bucket.blob(gcs_path).upload_from_filename, local_path
-            )
-            print(f"  Uploaded '{local_path}'")
-        except Exception as e:
-            print(f"  FAILED to upload '{local_path}'. Reason: {e}")
-
-
-async def main():
+if __name__ == "__main__":
     # Select model class based on id
     if model_id == "google/gemma-3-1b-pt": # 1B is text only
         model_class = AutoModelForCausalLM
@@ -75,67 +47,16 @@ async def main():
 
 
     local_dir = f"./model/{model_id}"
-    print(f"downloading model {model_id} to folder {local_dir} ...")
-    snapshot_download(repo_id=model_id, local_dir=local_dir)
+    download_from_hf(model_id, local_dir)
 
     # Load model and tokenizer from downloaded directory
-    model = model_class.from_pretrained(local_dir, token=HF_TOKEN, **model_kwargs)
+    # model = model_class.from_pretrained(local_dir, token=HF_TOKEN, **model_kwargs)
 
     #tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it") # Load the Instruction Tokenizer to use the official Gemma template
-    tokenizer = AutoTokenizer.from_pretrained(local_dir, token=HF_TOKEN) # Load the Instruction Tokenizer to use the official Gemma template
-
-    try:
-        storage_client = storage.Client()
-        bucket = storage_client.get_bucket(GCS_BUCKET_NAME)
-        print(f"Successfully accessed bucket: '{GCS_BUCKET_NAME}'")
-    except NotFound:
-        print(f"Error: Bucket '{GCS_BUCKET_NAME}' not found.")
-        print("Please ensure the bucket exists and you have entered the correct name.")
-        sys.exit(1)
-    except Exception as e:
-        print(f"An error occurred while accessing the bucket: {e}")
-        print("Please ensure you have authenticated correctly ('gcloud auth application-default login')")
-        print("and have the 'Storage Object Admin' or 'Storage Admin' role on the bucket.")
-        sys.exit(1)
-
-    gcs_uri = f"gs://{GCS_BUCKET_NAME}/{GCS_DESTINATION_PATH}/{model_id}"
-    print(f"Target GCS URI: {gcs_uri}")
+    # tokenizer = AutoTokenizer.from_pretrained(local_dir, token=HF_TOKEN) # Load the Instruction Tokenizer to use the official Gemma template
 
     # save the full precision model and the tokenizer
-    model.save_pretrained(local_dir, safe_serialization=False)
-    tokenizer.save_pretrained(local_dir)
+    # model.save_pretrained(local_dir, safe_serialization=False)
+    # tokenizer.save_pretrained(local_dir)
 
-
-    print(f"Uploading files from {local_dir} to {GCS_BUCKET_NAME}...")
-    # 1. Create a semaphore to limit concurrent operations.
-    semaphore = asyncio.Semaphore(8)
-
-    tasks = [] 
-    # os.walk() generates the file names in a directory tree by walking it.
-    for root, _, files in os.walk(local_dir):
-        for filename in files:
-            # Construct the full local path of the file.
-            local_path = os.path.join(root, filename)
-
-            # Construct the full GCS path for the blob.
-            # os.path.relpath gets the path of the file relative to the source_directory.
-            relative_path = os.path.relpath(local_path, local_dir)
-            # Ensure the GCS path uses forward slashes, which is the standard for object storage.
-            gcs_path = os.path.join(GCS_DESTINATION_PATH, relative_path).replace(os.path.sep, '/')
-
-            # Create a blob object and upload the file.
-            task = upload_blob_async(bucket, semaphore, local_path, gcs_path)
-            tasks.append(task)
-            # blob = bucket.blob(gcs_path)
-            # blob.upload_from_filename(local_path)
-            
-            # print(f"  Uploaded '{local_path}' to '{gcs_path}'")
-            # files_uploaded += 1
-
-    if not tasks:
-        return
-
-    await asyncio.gather(*tasks)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(upload_to_gcs(GCS_BUCKET_NAME, GCS_DESTINATION_PATH, model_id, local_dir))

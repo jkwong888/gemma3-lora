@@ -4,40 +4,19 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageT
 from peft import LoraConfig
 from trl import SFTConfig
 
-from utils.dataset import load_dataset
+from utils.dataset import load_dataset, create_conversation
+from prompt import system_message, user_prompt
 
-# System message for the assistant 
-system_message = """You are a text to SQL query translator. Users will ask you questions in English and you will generate a SQL query based on the provided SCHEMA."""
-
-# User prompt that combines the user query and the schema
-user_prompt = """Given the <USER_QUERY> and the <SCHEMA>, generate the corresponding SQL command to retrieve the desired data, considering the query's syntax, semantics, and schema constraints.
-
-<SCHEMA>
-{context}
-</SCHEMA>
-
-<USER_QUERY>
-{question}
-</USER_QUERY>
-"""
-
-def create_conversation(sample):
-  return {
-    "messages": [
-      # {"role": "system", "content": system_message},
-      {"role": "user", "content": user_prompt.format(question=sample["sql_prompt"], context=sample["sql_context"])},
-      {"role": "assistant", "content": sample["sql"]}
-    ]
-  }  
+GCS_BUCKET_NAME = "jkwng-hf-datasets"  
+GCS_DESTINATION_PATH = "datasets" # The folder path inside your GCS bucket
 
 # Load dataset from the hub
 # dataset = load_dataset("philschmid/gretel-synthetic-text-to-sql", split="train")
 dataset_id = "philschmid/gretel-synthetic-text-to-sql" 
-dataset = load_dataset(dataset_id)
-
+dataset = load_dataset_from_gcs(f"gs://{GCS_BUCKET_NAME}/{GCS_DESTINATION_PATH}/{dataset_id}")
 
 # Print formatted user prompt
-print(dataset["train"][345]["messages"][1]["content"])
+#print(dataset["train"][345]["messages"][1]["content"])
 
 # Hugging Face model id
 model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
@@ -57,7 +36,7 @@ else:
 # Define model init arguments
 model_kwargs = dict(
     #attn_implementation="eager", # Use "flash_attention_2" when running on Ampere or newer GPU
-    attn_implementation="flash_attention_2", # Use "flash_attention_2" when running on Ampere or newer GPU
+    #attn_implementation="flash_attention_2", # Use "flash_attention_2" when running on Ampere or newer GPU
     torch_dtype=torch_dtype, # What torch dtype to use, defaults to auto
     device_map="auto", # Let torch decide how to load the model
 )
