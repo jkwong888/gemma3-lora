@@ -63,6 +63,8 @@ def main():
        max_num_seqs=8,              # maximum number of concurrent sequences processed in parallel in a batch 
        max_num_batched_tokens=2048, # number of tokens to process in a batch - bigger numbers here for larger input context that is mostly prefill,
                                     # smaller numbers for lower inter-token latency for longer outputs (smaller batches when decode phase is prioritized)
+       #max_seq_len_to_capture=512, # use optimized cudagraphs for sequences of this length - if we have enough VRAM
+       enforce_eager=True,          # disable cuda graph capture - slower but saves VRAM
     )
 
     # note: max_num_seqs * max_num_batched_tokens affects throughput at the cost of more VRAM usage, as processing more sequences concurrently requires
