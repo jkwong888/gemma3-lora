@@ -4,17 +4,24 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageT
 import os
 import sys
 import asyncio
+import argparse
 from utils.model import download_from_hf, upload_to_gcs
 
-GCS_BUCKET_NAME = "jkwng-model-data"  
-GCS_DESTINATION_PATH = "models" # The folder path inside your GCS bucket
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Download model from Hugging Face and upload to GCS")
+parser.add_argument("--gcs-bucket-name", type=str, default="jkwng-model-data",
+                    help="GCS bucket name (default: jkwng-model-data)")
+parser.add_argument("--gcs-destination-path", type=str, default="models",
+                    help="GCS destination path inside bucket (default: models)")
+parser.add_argument("--model-id", type=str, default="unsloth/gemma-3-12b-it-unsloth-bnb-4bit",
+                    help="Hugging Face model ID (default: unsloth/gemma-3-12b-it-unsloth-bnb-4bit)")
+args = parser.parse_args()
+
+GCS_BUCKET_NAME = args.gcs_bucket_name
+GCS_DESTINATION_PATH = args.gcs_destination_path
+model_id = args.model_id
 
 HF_TOKEN = os.getenv("HF_TOKEN")
-
-# Hugging Face model id
-#model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
-#model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
-model_id = os.getenv("MODEL_ID") or "unsloth/gemma-3-12b-it-unsloth-bnb-4bit"
 
 if __name__ == "__main__":
     # Select model class based on id
