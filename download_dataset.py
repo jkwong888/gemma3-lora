@@ -4,11 +4,21 @@ from google.api_core.exceptions import NotFound
 
 import os
 import sys
+import argparse
 
-GCS_BUCKET_NAME = "jkwng-hf-datasets"  
-GCS_DESTINATION_PATH = "datasets" # The folder path inside your GCS bucket
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Download and upload dataset to GCS")
+parser.add_argument("--gcs-bucket-name", type=str, default="jkwng-hf-datasets",
+                    help="GCS bucket name (default: jkwng-hf-datasets)")
+parser.add_argument("--gcs-destination-path", type=str, default="datasets",
+                    help="GCS destination path inside bucket (default: datasets)")
+parser.add_argument("--dataset-id", type=str, default="philschmid/gretel-synthetic-text-to-sql",
+                    help="Hugging Face dataset ID (default: philschmid/gretel-synthetic-text-to-sql)")
+args = parser.parse_args()
 
-dataset_id = "philschmid/gretel-synthetic-text-to-sql"
+GCS_BUCKET_NAME = args.gcs_bucket_name
+GCS_DESTINATION_PATH = args.gcs_destination_path
+dataset_id = args.dataset_id
 
 if not os.path.exists(f"dataset/{dataset_id}"):
   # Load dataset from the hub

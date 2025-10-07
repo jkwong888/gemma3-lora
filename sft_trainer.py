@@ -1,6 +1,7 @@
 import os
 import torch
 import asyncio
+import argparse
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageTextToText, BitsAndBytesConfig
 
 from peft import LoraConfig
@@ -10,16 +11,30 @@ from utils.dataset import load_dataset_from_gcs, create_conversation
 from utils.model import load_model_from_gcs
 from prompt import system_message, user_prompt
 
-GCS_MODEL_BUCKET_NAME = "jkwng-model-data"  
-GCS_MODEL_PATH = "models" # The folder path inside your GCS bucket
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Fine-tune Gemma model with LoRA")
+parser.add_argument("--gcs-model-bucket", type=str, default="jkwng-model-data",
+                    help="GCS bucket name for models (default: jkwng-model-data)")
+parser.add_argument("--gcs-model-path", type=str, default="models",
+                    help="GCS path for models inside bucket (default: models)")
+parser.add_argument("--gcs-dataset-bucket", type=str, default="jkwng-hf-datasets",
+                    help="GCS bucket name for datasets (default: jkwng-hf-datasets)")
+parser.add_argument("--gcs-dataset-path", type=str, default="datasets",
+                    help="GCS path for datasets inside bucket (default: datasets)")
+parser.add_argument("--dataset-id", type=str, default="philschmid/gretel-synthetic-text-to-sql",
+                    help="Dataset ID (default: philschmid/gretel-synthetic-text-to-sql)")
+parser.add_argument("--model-id", type=str, default=None,
+                    help="Hugging Face model ID (default: from MODEL_ID env or google/gemma-3-12b-it)")
+args = parser.parse_args()
 
-GCS_DATASET_BUCKET_NAME = "jkwng-hf-datasets"  
-GCS_DATASET_PATH = "datasets" # The folder path inside your GCS bucket
-
+GCS_MODEL_BUCKET_NAME = args.gcs_model_bucket
+GCS_MODEL_PATH = args.gcs_model_path
+GCS_DATASET_BUCKET_NAME = args.gcs_dataset_bucket
+GCS_DATASET_PATH = args.gcs_dataset_path
+dataset_id = args.dataset_id
 
 # Load dataset from the hub
-# dataset = load_dataset("philschmid/gretel-synthetic-text-to-sql", split="train")
-dataset_id = "philschmid/gretel-synthetic-text-to-sql" 
+# dataset = load_dataset("philschmid/gretel-synthetic-text-to-sql", split="train") 
 dataset = load_dataset_from_gcs(f"gs://{GCS_DATASET_BUCKET_NAME}/{GCS_DATASET_PATH}/{dataset_id}", split="train")
 
 dataset = dataset.map(create_conversation, batched=False, fn_kwargs={"system_message": system_message, "user_prompt": user_prompt})
@@ -29,7 +44,7 @@ dataset = dataset.map(create_conversation, batched=False, fn_kwargs={"system_mes
 
 # Hugging Face model id
 #model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
-model_id = os.getenv("MODEL_ID") or "google/gemma-3-12b-it" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+model_id = args.model_id or os.getenv("MODEL_ID") or "google/gemma-3-12b-it" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
 #model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
 
 local_dir = f"./model/{model_id}"
