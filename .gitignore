@@ -4,4 +4,4 @@ dataset
 env
 gemma-text-to-sql
 *.jsonl
-__pycache__/
+**/__pycache__

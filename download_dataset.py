@@ -16,18 +16,8 @@ if not os.path.exists(f"dataset/{dataset_id}"):
 
   # save to disk
   dataset.save_to_disk(f"dataset/{dataset_id}")
-
-dataset = load_from_disk(f"dataset/{dataset_id}")
-#dataset = dataset.shuffle().select(range(12500))
-
-# Convert dataset to OAI messages
-#dataset = dataset.map(create_conversation, remove_columns=dataset.features,batched=False)
-# split dataset into 10,000 training samples and 2,500 test samples
-#dataset = dataset.train_test_split(test_size=2500/12500)
-
-# Print formatted user prompt
-#print(dataset["train"][345]["messages"][0]["content"])
-#print(dataset["train"][345]["messages"][1]["content"])
+else:
+  dataset = load_from_disk(f"dataset/{dataset_id}")
 
 # write the dataset to gcs
 try:
