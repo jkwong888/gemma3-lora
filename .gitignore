@@ -2,6 +2,8 @@ hf_token
 model
 dataset
 env
+venv
+.venv
 gemma-text-to-sql
 *.jsonl
 **/__pycache__

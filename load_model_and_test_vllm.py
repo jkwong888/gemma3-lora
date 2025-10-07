@@ -58,6 +58,7 @@ def main():
     vllm_model = LLM(
        model=local_dir,
        tokenizer=local_dir,
+       enable_prefix_caching=True,
        gpu_memory_utilization=0.95, # how much total VRAM we're allowed to use
        max_model_len=10000,         # model context window length (incl input and output) - affects total KV Cache size calculation on startup
        max_num_seqs=8,              # maximum number of concurrent sequences processed in parallel in a batch 
