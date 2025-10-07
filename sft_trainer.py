@@ -1,25 +1,39 @@
+import os
 import torch
+import asyncio
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageTextToText, BitsAndBytesConfig
 
 from peft import LoraConfig
 from trl import SFTConfig
 
-from utils.dataset import load_dataset, create_conversation
+from utils.dataset import load_dataset_from_gcs, create_conversation
+from utils.model import load_model_from_gcs
 from prompt import system_message, user_prompt
 
-GCS_BUCKET_NAME = "jkwng-hf-datasets"  
-GCS_DESTINATION_PATH = "datasets" # The folder path inside your GCS bucket
+GCS_MODEL_BUCKET_NAME = "jkwng-model-data"  
+GCS_MODEL_PATH = "models" # The folder path inside your GCS bucket
+
+GCS_DATASET_BUCKET_NAME = "jkwng-hf-datasets"  
+GCS_DATASET_PATH = "datasets" # The folder path inside your GCS bucket
+
 
 # Load dataset from the hub
 # dataset = load_dataset("philschmid/gretel-synthetic-text-to-sql", split="train")
 dataset_id = "philschmid/gretel-synthetic-text-to-sql" 
-dataset = load_dataset_from_gcs(f"gs://{GCS_BUCKET_NAME}/{GCS_DESTINATION_PATH}/{dataset_id}")
+dataset = load_dataset_from_gcs(f"gs://{GCS_DATASET_BUCKET_NAME}/{GCS_DATASET_PATH}/{dataset_id}", split="train")
+
+dataset = dataset.map(create_conversation, batched=False, fn_kwargs={"system_message": system_message, "user_prompt": user_prompt})
 
 # Print formatted user prompt
 #print(dataset["train"][345]["messages"][1]["content"])
 
 # Hugging Face model id
-model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+#model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+model_id = os.getenv("MODEL_ID") or "google/gemma-3-12b-it" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+#model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+
+local_dir = f"./model/{model_id}"
+asyncio.run(load_model_from_gcs(f"gs://{GCS_MODEL_BUCKET_NAME}/{GCS_MODEL_PATH}/{model_id}", local_dir))
 
 # Select model class based on id
 if model_id == "google/gemma-3-1b-pt": # 1B is text only
@@ -51,13 +65,13 @@ model_kwargs["quantization_config"] = BitsAndBytesConfig(
 )
 
 # Load model and tokenizer
-print(f"loading model from ./model/{model_id} ...")
-model = model_class.from_pretrained(f"./model/{model_id}", **model_kwargs)
+print(f"loading model from {local_dir} ...")
+model = model_class.from_pretrained(local_dir, **model_kwargs)
 
 # Load tokenizer
-print(f"loading tokenizer from ./model/{model_id} ...")
+print(f"loading tokenizer from {local_dir} ...")
 #tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it") # Load the Instruction Tokenizer to use the official Gemma template
-tokenizer = AutoTokenizer.from_pretrained(f"./model/{model_id}") # Load the Instruction Tokenizer to use the official Gemma template
+tokenizer = AutoTokenizer.from_pretrained(f"{local_dir}") # Load the Instruction Tokenizer to use the official Gemma template
 
 
 peft_config = LoraConfig(
@@ -72,11 +86,11 @@ peft_config = LoraConfig(
 
 args = SFTConfig(
     output_dir="gemma-text-to-sql",         # directory to save and repository id
-    max_seq_length=512,                     # max sequence length for model and packing of the dataset
+    max_seq_length=256,                   # max sequence length for model and packing of the dataset - set to longest sequence 
     packing=True,                           # Groups multiple samples in the dataset into a single sequence
     num_train_epochs=3,                     # number of training epochs
     per_device_train_batch_size=1,          # batch size per device during training
-    gradient_accumulation_steps=4,          # number of steps before performing a backward/update pass
+    gradient_accumulation_steps=8,          # number of steps before performing a backward/update pass
     gradient_checkpointing=True,            # use gradient checkpointing to save memory
     optim="adamw_torch_fused",              # use fused adamw optimizer
     logging_steps=10,                       # log every 10 steps
@@ -101,7 +115,7 @@ from trl import SFTTrainer
 trainer = SFTTrainer(
     model=model,
     args=args,
-    train_dataset=dataset["train"],
+    train_dataset=dataset,
     peft_config=peft_config,
     processing_class=tokenizer
 )

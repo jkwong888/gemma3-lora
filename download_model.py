@@ -13,7 +13,8 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Hugging Face model id
 #model_id = "google/gemma-3-27b-pt" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
-model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+#model_id = "unsloth/gemma-3-12b-it-unsloth-bnb-4bit" # or `google/gemma-3-4b-pt`, `google/gemma-3-12b-pt`, `google/gemma-3-27b-pt`
+model_id = os.getenv("MODEL_ID") or "unsloth/gemma-3-12b-it-unsloth-bnb-4bit"
 
 if __name__ == "__main__":
     # Select model class based on id
